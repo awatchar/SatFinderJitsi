@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SatFinder 4-Frame Layout (Jitsi + Local Name)</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    /* กริดหลัก: ซ้าย/ขวา 50:50 */
+    .root {
+      height: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+
+    /* ฝั่งซ้าย: บน/ล่าง 50:50 */
+    .left {
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      gap: 0;
+      min-height: 0;
+    }
+
+    /* ส่วนล่างของฝั่งซ้าย: ซ้าย/ขวา 50:50 */
+    .left-bottom {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      min-height: 0;
+    }
+
+    .cell {
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+
+    #jitsi-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* (ตัวเลือก) ปุ่มเล็ก ๆ มุมขวาบนของ Jitsi cell หากต้องการให้เปลี่ยนชื่อได้ภายหลัง */
+    .jitsi-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    .mini-toolbar {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 10;
+      display: none; /* ปิดไว้ก่อน; ถ้าต้องการให้แสดง เปลี่ยนเป็น flex */
+      gap: 8px;
+    }
+    .mini-toolbar button {
+      font: inherit;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background: rgba(255,255,255,0.9);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="root">
+    <!-- ซ้าย -->
+    <div class="left">
+      <!-- Left-Top: Jitsi -->
+      <div class="cell">
+        <div class="jitsi-wrapper">
+          <div class="mini-toolbar">
+            <button type="button" id="btn-change-name">Change name</button>
+            <button type="button" id="btn-reset-name">Reset</button>
+          </div>
+          <div id="jitsi-container"></div>
+        </div>
+      </div>
+
+      <!-- Left-Bottom: 2 เฟรม -->
+      <div class="left-bottom">
+        <div class="cell">
+          <iframe src='about:"Left-Bottom-Left"' title="Left-Bottom-Left"></iframe>
+        </div>
+        <div class="cell">
+          <iframe src='about:"Left-Bottom-Right"' title="Left-Bottom-Right"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- ขวา -->
+    <div class="cell">
+      <iframe src='about:"Right"' title="Right"></iframe>
+    </div>
+  </div>
+
+  <!-- Jitsi IFrame API -->
+  <script src="https://meet.jit.si/external_api.js"></script>
+  <script>
+    (function () {
+      const STORAGE_KEY = "satfinder_displayName";
+
+      // 1) ดึงชื่อจาก localStorage
+      let displayName = localStorage.getItem(STORAGE_KEY);
+
+      // 2) ถ้าไม่เคยตั้งชื่อ ให้ถามครั้งแรก
+      if (!displayName) {
+        const input = prompt("กรอกชื่อสถานี/ชื่อเครื่อง (ตั้งครั้งเดียว เครื่องนี้จะจำไว้):", "SatFinder Station");
+        displayName = (input && input.trim()) ? input.trim() : "SatFinder Station";
+        localStorage.setItem(STORAGE_KEY, displayName);
+      }
+
+      // 3) สร้าง Jitsi ใน Left-Top
+      const domain = "meet.jit.si";
+      const options = {
+        roomName: "SatFinderJitsi",
+        parentNode: document.getElementById("jitsi-container"),
+        width: "100%",
+        height: "100%",
+        configOverwrite: {
+          prejoinPageEnabled: true
+        },
+        userInfo: {
+          displayName: displayName
+        }
+      };
+
+      const api = new JitsiMeetExternalAPI(domain, options);
+
+      // 4) ตั้งชื่อซ้ำเมื่อ join แล้ว (เพื่อความแน่นอน)
+      api.addEventListener("videoConferenceJoined", function () {
+        api.executeCommand("displayName", displayName);
+      });
+
+      /* ===== ตัวเลือกเสริม: เปิดให้เปลี่ยนชื่อ/รีเซ็ตได้ =====
+         - ตอนนี้ซ่อนปุ่มไว้ (display:none)
+         - ถ้าต้องการใช้งาน ให้ไปที่ CSS: .mini-toolbar เปลี่ยน display เป็น flex
+      */
+      const btnChange = document.getElementById("btn-change-name");
+      const btnReset = document.getElementById("btn-reset-name");
+
+      btnChange?.addEventListener("click", function () {
+        const input = prompt("เปลี่ยนชื่อสถานี/ชื่อเครื่อง:", displayName);
+        const newName = (input && input.trim()) ? input.trim() : displayName;
+        displayName = newName;
+        localStorage.setItem(STORAGE_KEY, displayName);
+        api.executeCommand("displayName", displayName);
+      });
+
+      btnReset?.addEventListener("click", function () {
+        localStorage.removeItem(STORAGE_KEY);
+        alert("ลบชื่อที่จำไว้แล้ว กรุณารีเฟรชหน้าเพื่อให้ระบบถามชื่อใหม่");
+      });
+    })();
+  </script>
+</body>
+</html>
